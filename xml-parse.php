@@ -51,6 +51,14 @@ class Lex {
   {
     return ($this->characterCount - $this->cur) <= 1;
   }
+  public function peek() {
+    $temp = serialize($this->context);
+    $tempCur = $this->cur;
+    $p = $this->next();
+    $this->context = unserialize($temp);
+    $this->cur = $tempCur;
+    return $p;
+  }
   public function next ()
   {
     if ($this->isEOF()) return false;
@@ -134,13 +142,20 @@ class Lex {
 class XMLParser {
   private $lexed;
   public $tree;
+  public const OPEN_TAG = "open";
+  public const CLOSE_TAG = "close";
+  public const TAG_VALUE = "value";
+  protected $next;
+  private $index = 0;
+ 
   public function __construct($lexedContent) 
   {
     $this->lexed = $lexedContent;
     $this->tree = ["xml" => [], "root" => []];
   }
-  protected function parseXMLInfo ($lex, $nextValue) {
-    if ($nextValue !== "<?") return;
+  protected function parseXMLInfo (&$lex) {
+    $next = $lex->next();
+    if ($next->value !== "<?") return;
     $lex->next(); // removing <?
     $next = $lex->next(); // removing xml
     while ($next->value !== "?>") {
@@ -151,70 +166,139 @@ class XMLParser {
       $next = $lex->next();
     }
   }
-  protected function parseTags(&$lex, $nextValue) {
-    $this->parseTag($lex, $nextValue, $this->tree["root"], "root"); 
-  }
-  protected function getTagParams(&$lex, $nextValue, &$root) {
-    $nextValue = $lex->next()->value; // this is the tag name
+  protected function getTagParams(&$lex, &$root) {
+    $next = $lex->next();
+    $nextValue = $next->value; // this is the tag name
      $params = [];
      while ($nextValue !== ">") {
         // x=y
         $lex->next(); // removing =
         $value = $lex->next();
-        $params[$nextValue] = $value->value;
-        $nextValue = $lex->next()->value;
+        if ($value) {
+           $params[$nextValue] = $value->value;
+           $nextValue = $lex->next()->value;
+        } else {
+          break;
+        }
      }
-     $root["params"] = $params;
-     $nextValue = $lex->next()->value; // >
-     return $nextValue;
+     if ($params) {
+       $root["params"] = $params;
+     }
+     return $lex->next();
   }
-  protected function parseTag($lex, $nextValue, &$root) {
-    if ($nextValue !== "<") return $nextValue; // this seems to be the name on the closing tag
-    $nextValue = $lex->next()->value; // removing <
-    $rootKey = $nextValue;
-    $root[$rootKey] = [
-      "params" => [],
-      "children" => [],
+
+  protected function getTagValue(&$lex, &$root) {
+    $next = $this->next;
+    if ($next && ($next->value === "<" || $next->value === "</")) return;// if it is an opening tag it is likely not a value    
+    $valueChunks = [];
+    while ($next->value && $next->value !== "</") {
+      $valueChunks[] = $next->value;
+      $next = $lex->next();
+    } 
+    $this->next = $next;
+    $root["value"] = implode(' ', $valueChunks);
+    $root["type"] = self::TAG_VALUE; 
+  }
+
+  protected function all($lex) {
+    $all = [];
+    $next = $this->parsetag2($lex);
+    $keyChain = [];
+    while ($next) {
+      if ($next["type"] !== self::CLOSE_TAG) {
+        $keyChain[] = $next["name"];
+        $next["parent"] = count($keyChain) > 1 ? $keyChain[count($keyChain) - 2] : '';
+        $all[$next["name"]] = $next;
+      } else {
+        array_pop($keyChain);
+      }
+      $next = $this->parsetag2($lex);
+    }
+    return $all;
+  }
+  protected function parseTags($all, &$_i ) {
+    $res = [];
+    // this recursion is taken from: https://www.geeksforgeeks.org/javascript/build-tree-array-from-flat-array-in-javascript/
+    foreach ($all as $allKey => $item) {
+     if (isset($item["parent"]) && !$item["parent"]) $res[] = &$all[$allKey];
+      else {
+        $all[$item["parent"]]["children"][] = &$all[$item["name"]];
+      }
+    }
+    return $res;
+  }
+
+  protected function parseOpenTag($lex) {
+    $next = $this->next;
+    if ($next && $next->value !== "<") return false;
+    $tagName = $lex->next(); 
+    if (!$tagName) return false;
+    $root = [
+        "name" => $tagName->value,
+        "type" => self::OPEN_TAG
     ];
-    $nextValue = $this->getTagParams($lex, $nextValue, $root[$nextValue]);
-    if ($nextValue === "<") {
-      $this->parseTag($lex, $nextValue, $root[$rootKey]["children"]);
+    $next = $this->getTagParams($lex, $root);
+    $this->next = $next;
+    return $root;  
+  }
+  protected function parseCloseTag($lex) {
+    $next = $this->next;
+    if ($next && $next->value === "</") {
+      $closingTagName = $lex->next();
+      $root = [
+              "name" => $closingTagName->value ,
+              "type" => self::CLOSE_TAG
+      ];
+
+      $next = $lex->next(); // this is the ending >
+      $next = $lex->next(); // setting the new next to < or similar --- maybe this should go outsise?
+      $this->next = $next;
+      return $root;
     }
-    else {
-      $valueChunks = [];
-      while ($nextValue && $nextValue !== "</") {
-        $valueChunks[] = $nextValue;
-        $nextValue = $lex->next()->value;
-      }      
-      // $root[$rootKey]['value'] = $nextValue;
-      $root[$rootKey]['value'] = implode(' ', $valueChunks);
+  }
+ protected function parseTag2(
+    $lex, 
+    &$root = null, 
+  ) 
+ {
+    if (!$this->next) {
+      $this->next = $lex->next();
     }
+    $res = $this->parseOpenTag($lex);
+    if ($res) {
+      $key = array_keys($res)[0];
+      $this->getTagValue($lex, $res);
+      return $res;
+    }
+    return  $this->parseCloseTag($lex);
   }
 
   public function encode() {
-    $next = $this->lexed->next();
-    while ($next) {
-      $this->parseXMLInfo($this->lexed, $next->value);
-      $this->parseTags($this->lexed, $next->value);
-      $next = $this->lexed->next();
-    }
+    $root = [];
+    $this->parseXMLInfo($this->lexed);
+    $i = 0;
+    $this->tree["root"] = $this->parseTags($this->all($this->lexed), $i);
   }
 
   public function decodeTag(&$out, $root) {
     foreach($root as $key => $tag) {
-      $out .= '<' . $key;
-      $params = $tag['params'];
-      foreach($params as $var => $value) {
-        $out .= "\n" . ' ' . $var . '="' . $value . '"';
+      $out .= '<' . $tag["name"];
+      $params = $tag['params'] ?? '';
+      if (is_array($params)) {
+        foreach($params as $var => $value) {
+          $out .= ' ' . $var . '="' . $value . '"';
+        }
       }
-      $out .= '>' . "\n";
-      if ($tag['children']) {
-        $this->decodeTag($out, $tag['children']);
+      $out .= '>';
+      if (isset($tag["children"])) {
+        if ($tag['children']) {
+          $this->decodeTag($out, $tag['children']);
+        }
       }
       if (isset($tag['value'])) {
         $out .= $tag['value'];
       }
-      $out .= "\n" . '</' . $key . '>';
+      $out .= '</' . $tag["name"] . '>';
     }
     
   }
@@ -229,4 +313,4 @@ $lex = new Lex(file_get_contents("./example.xml"));
 $parser = new XMLParser($lex);
 $parser->encode();
 $parsed = $parser->tree;
-$parser->decode();
+echo $parser->decode();
