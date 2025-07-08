@@ -163,9 +163,9 @@ class XMLParser {
   protected $next;
   private $index = 0;
  
-  public function __construct($lexedContent) 
+  public function __construct($src) 
   {
-    $this->lexed = $lexedContent;
+    $this->lexed = new Lex($src);
     $this->tree = ["xml" => [], "root" => []];
   }
   protected function parseXMLInfo (&$lex) {
@@ -324,8 +324,4 @@ class XMLParser {
     echo($out);
   }
 }
-$lex = new Lex(file_get_contents("./example.xml"));
-$parser = new XMLParser($lex);
-$parser->encode();
-$parsed = $parser->tree;
-echo $parser->decode();
+
