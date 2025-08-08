@@ -77,16 +77,16 @@ class Lex {
   {
     return ($this->characterCount - $this->cur) < 1 ;
   }
-  public function peek () {
+  private function peek () {
     $i = $this->cur;
     return $this->context[$i++];
   }
-  public function getCurrent() {
+  private function getCurrent() {
     if (isset($this->context[$this->cur]))
       return $this->context[$this->cur];
     die(strlen($this->context) . ":". $this->cur);
   }
-  public function parseOpenAngle() {
+  private function parseOpenAngle() {
     // current is "<"
     $val = $this->getCurrent();
     $this->chop();
@@ -120,6 +120,14 @@ class Lex {
   }
   private function isTagName($el) {
     return (ctype_alpha($el) || ctype_digit($el) || $el === ":"); 
+  }
+  public function peekToken () {
+    $next = $this->next();
+    if ($next->type !== Type::EOF) {
+      $len = strlen($next->value);
+      $this->cur = $this->cur - $len;
+    } 
+    return $next;
   }
   public function next ()
   {
@@ -173,3 +181,4 @@ class Lex {
     }
   }
 }
+
