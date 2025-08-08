@@ -21,11 +21,14 @@ class Type {
   public const OPEN_ANGLE = "<";
   public const OPEN_CLOSE_TAG = "</";
   public const CLOSE_SELF_CLOSE_TAG = "/>"; 
+  public const OPEN_XML = "<?"; 
+  public const CLOSE_XML = "?>"; 
   public const SYMBOL = "symbol";
   public const TEXT = "text";
   public const STRING = "string";
   public const EQUAL = "=";
   public const NUMBER = "number";
+  public const EOF = "EOF";
 }
 class Token {
   public $type, $value;
@@ -47,10 +50,8 @@ class Lex {
   public function __construct ($context) 
   {
     $this->context = $context;
-    $this->collected = "";
     $this->tokens = [];
     $this->cur = 0;
-    $this->wordCount = 0;
     $this->characterCount = strlen($context);
   }
 
@@ -74,14 +75,16 @@ class Lex {
   }
   private function isEOF() 
   {
-    return ($this->characterCount - $this->cur) === 0;
+    return ($this->characterCount - $this->cur) < 1 ;
   }
   public function peek () {
     $i = $this->cur;
     return $this->context[$i++];
   }
   public function getCurrent() {
-    return $this->context[$this->cur];
+    if (isset($this->context[$this->cur]))
+      return $this->context[$this->cur];
+    die(strlen($this->context) . ":". $this->cur);
   }
   public function parseOpenAngle() {
     // current is "<"
@@ -90,24 +93,22 @@ class Lex {
     $peeked = $this->peek();
     $token = new Token(Type::OPEN_ANGLE, $val);
     switch ($peeked) {
-      case "?":
-        $token->value = $val . $peeked;
-        $token->type = Type::OPEN_XML;
-        $this->chop();
-     case  "/":
-         $token->type = Type::OPEN_CLOSE_TAG;
-         $token->value = $val . $peeked;
-         $this->chop();
-  }
+      case "?": {
+          $token->value = $val . $peeked;
+          $token->type = Type::OPEN_XML;
+          $this->chop();
+          break;
+      }
+      case  "/": {
+          $token->type = Type::OPEN_CLOSE_TAG;
+          $token->value = $val . $peeked;
+          $this->chop();
+          break;
+      }
+    }
     return $token;
   }
-  private function isTagName($el) {
-    return (ctype_alpha($el) || ctype_digit($el)); 
-  }
-  public function next ()
-  {
-    if ($this->isEOF()) return false;
-    $this->trimLeft();
+  private function parseName() {
     if ($this->isTagName($this->getCurrent())) {
       $start = $this->cur;
       while ($this->isTagName($this->peek())) {
@@ -115,6 +116,18 @@ class Lex {
       }
       $tagName = substr($this->context, $start, $this->cur - $start);
       return new Token(Type::NAME, $tagName);
+    }
+  }
+  private function isTagName($el) {
+    return (ctype_alpha($el) || ctype_digit($el) || $el === ":"); 
+  }
+  public function next ()
+  {
+    if ($this->isEOF()) return new Token(Type::EOF, 'EOF');
+    $this->trimLeft();
+    $name = $this->parseName(); 
+    if ($name) {
+      return $name;
     }
     switch ($this->getCurrent()) {
       case "<": return $this->parseOpenAngle(); 
@@ -139,8 +152,10 @@ class Lex {
         return  new Token(Type::EQUAL, $val);
       }
       case "?": {
+        $val = $this->getCurrent();
+        $this->chop();
         if ($this->peek() === ">") {
-          $val = $this->getCurrent() . $this->peek();
+          $val .= $this->peek();
           $this->chop();
           return new TOKEN(Type::CLOSE_XML, $val);
         }
@@ -158,4 +173,3 @@ class Lex {
     }
   }
 }
-
