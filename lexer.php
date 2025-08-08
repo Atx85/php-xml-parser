@@ -122,10 +122,10 @@ class Lex {
     return (ctype_alpha($el) || ctype_digit($el) || $el === ":"); 
   }
   public function peekToken () {
+    $curBefore = $this->cur;
     $next = $this->next();
-    if ($next->type !== Type::EOF) {
-      $len = strlen($next->value);
-      $this->cur = $this->cur - $len;
+    if ($next && $next->type !== Type::EOF) {
+      $this->cur = $curBefore;
     } 
     return $next;
   }

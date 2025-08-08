@@ -29,19 +29,29 @@ class XMLParser {
     $this->lexed = new Lex($src);
     $this->tree = ["xml" => [], "root" => []];
   }
+  protected function expect(&$lex, $tokenType, $value = null) {
+    $peeked = $lex->peekToken();
+    if (!$peeked) return false;
+    if ($peeked->type !== $tokenType) return false;
+    if ($value && $peeked->value !== $value) return false;
+    $lex->next();
+    return $peeked;
+  }
   protected function parseXMLInfo (&$lex) {
-    $next = $lex->next();
-    if ($next->value !== "<?") return;
-    $lex->next(); // removing <?
-    $next = $lex->next(); // removing xml
-    while ($next->value !== "?>") {
-      // x=y
-      $lex->next(); // removing =
-      $value = $lex->next();
-      $this->tree["xml"][$next->value] = $value->value;
-      $next = $lex->next();
+    $this->expect($lex, Type::OPEN_XML);
+    $this->expect($lex, Type::NAME, "xml");
+    $isCloseXML = $this->expect($lex, Type::CLOSE_XML);
+    while (!$isCloseXML) {
+      $name =  $this->expect($lex, Type::NAME);
+      $this->expect($lex, Type::EQUAL);
+      $val = $this->expect($lex, Type::STRING);
+     if ($name && $val) {
+        $this->tree["xml"][$name->value] = $val->value;
+      }
+      $isCloseXML = $this->expect($lex, Type::CLOSE_XML);
     }
   }
+
   protected function getTagParams(&$lex, &$root) {
     $next = $lex->next();
     $nextValue = $next->value; // this is the tag name
