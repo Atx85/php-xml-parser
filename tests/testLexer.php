@@ -2,7 +2,8 @@
 include "lexer.php";
 $cases = [
   ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "[<?: '<?']\n[name: 'xml']\n[name: 'version']\n[=: '=']\n[string: '1.0']\n[name: 'encoding']\n[=: '=']\n[string: 'UTF-8']\n[?>: '?>']\n"],
-  ["<test />", "[<: '<']\n[name: 'test']\n[symbol: '/>']\n"],
+  ["<test />", "[<: '<']\n[name: 'test']\n[/>: '/>']\n"],
+  ["<test>foo-bar:with special chars</test>", "[<: '<']\n[name: 'test']\n[>: '>']\n[name: 'foo']\n[unknown: '-']\n[name: 'bar:with']\n[name: 'special']\n[name: 'chars']\n[</: '</']\n[name: 'test']\n[>: '>']\n"],
   ["<test></test>","[<: '<']\n[name: 'test']\n[>: '>']\n[</: '</']\n[name: 'test']\n[>: '>']\n"],
   ["<test foo=\"bar\"></test>","[<: '<']\n[name: 'test']\n[name: 'foo']\n[=: '=']\n[string: 'bar']\n[>: '>']\n[</: '</']\n[name: 'test']\n[>: '>']\n"],
   ["<test foo=\"bar\" hello=\"world\"></test>","[<: '<']\n[name: 'test']\n[name: 'foo']\n[=: '=']\n[string: 'bar']\n[name: 'hello']\n[=: '=']\n[string: 'world']\n[>: '>']\n[</: '</']\n[name: 'test']\n[>: '>']\n"],

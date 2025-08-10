@@ -146,13 +146,16 @@ class Lex {
       case "<": return $this->parseOpenAngle(); 
       case "/": {
         $val = $this->getCurrent();
+        $token =  new Token(Type::SYMBOL, $val);
         $this->chop(); // /
         $peeked = $this->peek();
         if ($peeked === ">") {
           $val .= $peeked;
           $this->chop(); // >
+          $token->type = Type::CLOSE_SELF_CLOSE_TAG;
+          $token->value = $val;
         }
-        return  new Token(Type::SYMBOL, $val);
+        return $token;
       }
       case ">": {
         $val = $this->getCurrent();

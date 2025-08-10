@@ -1,1 +1,2 @@
 php tests/testLexer.php
+php tests/testXmlParse.php

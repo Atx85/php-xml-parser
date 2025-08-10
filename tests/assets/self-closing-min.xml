@@ -1,0 +1,10 @@
+   <ns1:RequestHeader>
+      <ns1:networkCode>123456</ns1:networkCode>
+      <test />
+      <ns1:applicationName2>test</ns1:applicationName2>
+      <filterStatement>
+        <foo hello="world" />
+        <query>WHERE parentId IS NULL LIMIT 500</query>
+    </filterStatement>   
+  </ns1:RequestHeader>
+

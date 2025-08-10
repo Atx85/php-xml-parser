@@ -1,26 +1,33 @@
 <?php
 include "xml-parse.php";
-$path = "./tests/assets/example.xml";
+$paths = [
+  "./tests/assets/example.xml",
+  "./tests/assets/self-closing.xml",
+  "./tests/assets/self-closing-min.xml",
+  "./tests/assets/hidden-self-closing.xml",
+];
 
-$src = file_get_contents($path);
-$parser = new XMLParse($src);
-$parser->encode();
+function test ($path) {
+  $src = file_get_contents($path);
+  if (!$src) return "could not find: $path\n";
+  
+  $parser = new XMLParse($src);
+  $parsed = $parser->encode();
+  $parsed = $parser->decode();
+  $parsed = str_replace("\n", "", $parsed);
+  $parsed = str_replace(" ", "", $parsed);
 
-$dom = new \DOMDocument('1.0');
-$dom->preserveWhiteSpace = true;
-$dom->formatOutput = true;
-$dom->loadXML($parser->decode());
-$prettyGenerated = $dom->saveXML();
+  $src = str_replace("\n", "", $src);
+  $src = str_replace(" ", "", $src);
 
-$dom->loadXML($src);
-$prettySrc = $dom->saveXML();
-
-$res = $path;
-if (strcmp($prettySrc, $prettyGenerated) === 0) {
-  $res .= " [PASS]\n";
-} else {
-  $res .= " [FAIL]\n";
+  $res = $path;
+  if (strcmp($src, $parsed) === 0) {
+    $res .= " [PASS]\n";
+  } else {
+    $res .= " [FAIL]\n";
+  }
+  echo $res;
 }
-echo $res;
-
-// $parser = new XMLParser("<test />");
+foreach ($paths as $path) {
+  test($path);
+}
