@@ -29,6 +29,7 @@ class Type {
   public const EQUAL = "=";
   public const NUMBER = "number";
   public const EOF = "EOF";
+  public const UNKNOWN = "unknown";
 }
 class Token {
   public $type, $value;
@@ -84,6 +85,10 @@ class Lex {
   private function getCurrent() {
     if (isset($this->context[$this->cur]))
       return $this->context[$this->cur];
+
+    if (strlen($this->context) . ":". $this->cur) {
+      return new Token(Type::EOF, "EOF");
+    }
     die(strlen($this->context) . ":". $this->cur);
   }
   private function parseOpenAngle() {
@@ -178,7 +183,14 @@ class Lex {
         $this->chop();
         return new Token(Type::STRING, $str);
       }
-    }
+      default: {
+        $current = $this->getCurrent();
+        if (is_object($current) && is_a($current, "Token")) return $current; // EOF
+        $t = new Token(Type::UNKNOWN, $current);
+        $this->chop();
+        return $t;
+      }
+     }
   }
 }
 

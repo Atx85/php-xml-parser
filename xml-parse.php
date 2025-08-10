@@ -52,43 +52,24 @@ class XMLParser {
     }
   }
 
-  protected function getTagParams(&$lex, &$root) {
-    $next = $lex->next();
-    $nextValue = $next->value; // this is the tag name
-     $params = [];
-     while ($nextValue !== ">") {
-        // x=y
-        $lex->next(); // removing =
-        $value = $lex->next();
-        if ($value) {
-           $params[$nextValue] = $value->value;
-           $nextValue = $lex->next()->value;
-        } else {
-          break;
-        }
-     }
-     if ($params) {
-       $root["params"] = $params;
-     }
-     return $lex->next();
-  }
-
-  protected function getTagValue(&$lex, &$root) {
-    $next = $this->next;
-    if ($next && ($next->value === "<" || $next->value === "</")) return;// if it is an opening tag it is likely not a value    
-    $valueChunks = [];
-    while ($next->value && $next->value !== "</") {
-      $valueChunks[] = $next->value;
-      $next = $lex->next();
-    } 
-    $this->next = $next;
-    $root["value"] = implode(' ', $valueChunks);
-    $root["type"] = self::TAG_VALUE; 
+  protected function getTagValue(&$lex) {
+      $begin = $lex->cur;
+      $end = $begin;
+      $peeked = $lex->peekToken();
+      // <tag>value</tag> 
+      // <tag><anotherTag> 
+      // <tag></tag>
+      // <tag><selfClosing />
+      while ($peeked->type !== Type::OPEN_CLOSE_TAG && $peeked->type !== Type::OPEN_ANGLE) {
+        $end = $lex->cur;
+        $peeked = $lex->next();
+      }
+     return substr($lex->context, $begin, $end - $begin);
   }
 
   protected function all($lex) {
     $all = [];
-    $next = $this->parsetag2($lex);
+    $next = $this->parseTag($lex);
     $keyChain = [];
     while ($next) {
       if ($next["type"] !== self::CLOSE_TAG) {
@@ -98,7 +79,7 @@ class XMLParser {
       } else {
         array_pop($keyChain);
       }
-      $next = $this->parsetag2($lex);
+      $next = $this->parseTag($lex);
     }
     return $all;
   }
@@ -115,48 +96,57 @@ class XMLParser {
   }
 
   protected function parseOpenTag($lex) {
-    $next = $this->next;
-    if ($next && $next->value !== "<") return false;
-    $tagName = $lex->next(); 
+    if (!$this->expect($lex, Type::OPEN_ANGLE)) return false;
+    $tagName = $this->expect($lex, Type::NAME);
     if (!$tagName) return false;
     $root = [
-        "name" => $tagName->value,
-        "type" => self::OPEN_TAG
+      "name" => $tagName->value,
+      "type" => self::OPEN_TAG
     ];
-    $next = $this->getTagParams($lex, $root);
-    $this->next = $next;
-    return $root;  
+    $isCloseAngle = $this->expect($lex, Type::CLOSE_ANGLE);
+    $isCloseSelfClose = $this->expect($lex, Type::CLOSE_SELF_CLOSE_TAG);
+    $params = [];
+    while (!$isCloseAngle && !$isCloseSelfClose) {
+      $name =  $this->expect($lex, Type::NAME);
+      $this->expect($lex, Type::EQUAL);
+      $val = $this->expect($lex, Type::STRING);
+      if ($name && $val) {
+        $params[$name->value] = $val->value;
+      }
+      $isCloseAngle = $this->expect($lex, Type::CLOSE_ANGLE);
+      $isCloseSelfClose = $this->expect($lex, Type::CLOSE_SELF_CLOSE_TAG);
+    }
+    if ($params) {
+      $root["params"] = $params;
+    }
+    return $root; 
   }
-  protected function parseCloseTag($lex) {
-    $next = $this->next;
-    if ($next && $next->value === "</") {
-      $closingTagName = $lex->next();
-      $root = [
-              "name" => $closingTagName->value ,
-              "type" => self::CLOSE_TAG
-      ];
 
-      $next = $lex->next(); // this is the ending >
-      $next = $lex->next(); // setting the new next to < or similar --- maybe this should go outsise?
-      $this->next = $next;
-      return $root;
+  protected function parseCloseTag($lex) {
+    $this->expect($lex, Type::OPEN_CLOSE_TAG);
+    $name = $this->expect($lex, Type::NAME);
+    $this->expect($lex, Type::CLOSE_ANGLE);
+    if (!$name) {
+      if ($lex->peekToken()->type === Type::EOF) return false;
+      return die('parseCloseTag: "Closing tag name is not set."' . $lex->peekToken());
     }
+    $root =  [
+      "name" => $name->value,
+      "type" => self::CLOSE_TAG
+    ];
+    return $root;
   }
- protected function parseTag2(
-    $lex, 
-    &$root = null, 
-  ) 
- {
-    if (!$this->next) {
-      $this->next = $lex->next();
-    }
+
+  protected function parseTag($lex) 
+  {
+    if ($this->expect($lex, Type::EOF)) return false;
     $res = $this->parseOpenTag($lex);
     if ($res) {
-      $key = array_keys($res)[0];
-      $this->getTagValue($lex, $res);
+      $res["value"] = $this->getTagValue($lex);
       return $res;
     }
-    return  $this->parseCloseTag($lex);
+    $close =  $this->parseCloseTag($lex);
+    return $close;
   }
 
   public function encode() {
