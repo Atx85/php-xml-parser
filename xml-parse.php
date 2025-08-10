@@ -13,9 +13,9 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 include "./lexer.php";
-class XMLParser {
+class XMLParse {
   private $lexed;
   public $tree;
   public const OPEN_TAG = "open";
@@ -180,9 +180,14 @@ class XMLParser {
   }
 
   public function decode() {
-    $out = '';
+    $xml = ["<?xml"];
+    foreach ($this->tree["xml"] as $k => $v) {
+      $xml[] = $k . "=\"" . $v . "\"";
+    } 
+    $xml[] = "?>";
+    $out = implode(" ", $xml);
       $this->decodeTag($out, $this->tree['root']);
-    echo($out);
+    return $out;
   }
 }
 
